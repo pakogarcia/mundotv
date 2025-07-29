@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Selector IPTV por País y Categoría</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+    }
+    select {
+      margin: 1rem 0;
+      padding: 0.5rem;
+    }
+    .canal {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>IPTV por País y Categoría</h1>
+
+  <label for="pais">Selecciona País:</label>
+  <select id="pais"><option>Cargando...</option></select>
+
+  <br>
+
+  <label for="categoria">Selecciona Categoría:</label>
+  <select id="categoria"><option>Cargando...</option></select>
+
+  <div id="resultado" style="margin-top: 20px;"></div>
+
+  <script>
+    const urlPais = 'https://pakogarcia.github.io/mundotv/data/index.country.m3u';
+    const urlCategoria = 'https://pakogarcia.github.io/mundotv/data/index.category.m3u';
+
+    let canalesPais = [];
+    let canalesCategoria = [];
+
+    async function cargarM3U(url) {
+      const response = await fetch(url);
+      const texto = await response.text();
+      const lineas = texto.split('\n');
+      const canales = [];
+
+      for (let i = 0; i < lineas.length; i++) {
+        const linea = lineas[i].trim();
+
+        if (linea.startsWith('#EXTINF')) {
+          const info = linea.match(/tvg-id="(.*?)".*?tvg-name="(.*?)".*?tvg-country="(.*?)".*?tvg-language="(.*?)".*?group-title="(.*?)",(.+)/);
+          const urlStream = lineas[i + 1]?.trim();
+
+          if (info && urlStream) {
+            canales.push({
+              id: info[1],
+              nombre: info[2],
+              pais: info[3] || info[5], // Usa el grupo si no hay país
+              idioma: info[4],
+              categoria: info[5],
+              titulo: info[6],
+              url: urlStream
+            });
+          }
+        }
+      }
+      return canales;
+    }
+
+    async function inicializar() {
+      [canalesPais, canalesCategoria] = await Promise.all([
+        cargarM3U(urlPais),
+        cargarM3U(urlCategoria)
+      ]);
+
+      const paises = [...new Set(canalesPais.map(c => c.pais))].sort();
+      const categorias = [...new Set(canalesCategoria.map(c => c.categoria))].sort();
+
+      document.getElementById('pais').innerHTML =
+        '<option value="Todos">-- Todos --</option>' +
+        paises.map(p => `<option value="${p}">${p}</option>`).join('');
+
+      document.getElementById('categoria').innerHTML =
+        '<option value="Todos">-- Todos --</option>' +
+        categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+
+      document.getElementById('pais').addEventListener('change', mostrarCanales);
+      document.getElementById('categoria').addEventListener('change', mostrarCanales);
+
+      mostrarCanales(); // Mostrar al cargar
+    }
+
+    function mostrarCanales() {
+      const paisSel = document.getElementById('pais').value;
+      const catSel = document.getElementById('categoria').value;
+      const resultado = document.getElementById('resultado');
+
+      const canalesFiltrados = canalesPais.filter(cp =>
+        (paisSel === 'Todos' || cp.pais === paisSel) &&
+        canalesCategoria.some(cc => cc.id === cp.id &&
+          (catSel === 'Todos' || cc.categoria === catSel))
+      );
+
+      if (canalesFiltrados.length === 0) {
+        resultado.innerHTML = '<p>No se encontraron canales para esta selección.</p>';
+        return;
+      }
+
+      resultado.innerHTML = canalesFiltrados.map(c =>
+        `<div class="canal">
+          <strong>${c.titulo}</strong><br>
+          País: ${c.pais}<br>
+          Categoría: ${c.categoria}<br>
+          <a href="${c.url}" target="_blank">Ver canal</a>
+        </div>`
+      ).join('');
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
