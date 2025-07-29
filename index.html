@@ -62,17 +62,27 @@
         const linea = lineas[i].trim();
 
         if (linea.startsWith('#EXTINF')) {
-          const info = linea.match(/tvg-id="(.*?)".*?tvg-name="(.*?)".*?tvg-country="(.*?)".*?tvg-language="(.*?)".*?group-title="(.*?)",(.+)/);
+          // Extraer atributos con regex flexible
+          const info = {};
+          const attrRegex = /(\w+?)="(.*?)"/g;
+          let match;
+          while ((match = attrRegex.exec(linea)) !== null) {
+            info[match[1]] = match[2];
+          }
+          // Extraer título después de la coma
+          const tituloMatch = linea.match(/,(.*)$/);
+          const titulo = tituloMatch ? tituloMatch[1] : '';
+
           const urlStream = lineas[i + 1]?.trim();
 
-          if (info && urlStream) {
+          if (urlStream) {
             canales.push({
-              id: info[1],
-              nombre: info[2],
-              pais: info[3] || info[5], // Usa grupo como país si no está definido
-              idioma: info[4],
-              categoria: info[5],
-              titulo: info[6],
+              id: info['tvg-id'] || '',
+              nombre: info['tvg-name'] || '',
+              pais: info['group-title'] || '', // Aquí está el país en index.country.m3u
+              idioma: info['tvg-language'] || '',
+              categoria: info['group-title'] || '', // En index.category.m3u el grupo es la categoría
+              titulo: titulo,
               url: urlStream
             });
           }
@@ -87,8 +97,11 @@
         cargarM3U(urlCategoria)
       ]);
 
-      const paises = [...new Set(canalesPais.map(c => c.pais))].sort();
-      const categorias = [...new Set(canalesCategoria.map(c => c.categoria))].sort();
+      // Extraer países únicos de canalesPais (group-title)
+      const paises = [...new Set(canalesPais.map(c => c.pais).filter(p => p))].sort();
+
+      // Extraer categorías únicas de canalesCategoria (group-title)
+      const categorias = [...new Set(canalesCategoria.map(c => c.categoria).filter(c => c))].sort();
 
       document.getElementById('pais').innerHTML =
         '<option value="Todos">-- Todos --</option>' +
@@ -109,10 +122,10 @@
       const catSel = document.getElementById('categoria').value;
       const resultado = document.getElementById('resultado');
 
+      // Filtrar canales que coincidan con país y categoría
       const canalesFiltrados = canalesPais.filter(cp =>
         (paisSel === 'Todos' || cp.pais === paisSel) &&
-        canalesCategoria.some(cc => cc.id === cp.id &&
-          (catSel === 'Todos' || cc.categoria === catSel))
+        (catSel === 'Todos' || cp.categoria === catSel)
       );
 
       if (canalesFiltrados.length === 0) {
