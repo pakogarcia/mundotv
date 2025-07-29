@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>IPTV por País y Categoría (IPTV-org)</title>
+  <title>IPTV por País y Categoría (Debug)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -28,7 +28,7 @@
 </head>
 <body>
 
-  <h1>IPTV por País y Categoría (IPTV-org)</h1>
+  <h1>IPTV por País y Categoría (Debug)</h1>
 
   <label for="pais">Selecciona País:</label>
   <select id="pais"><option>Cargando...</option></select>
@@ -51,7 +51,6 @@
     let canalesPais = [];
     let canalesCategoria = [];
 
-    // Función para parsear M3U y extraer canales con atributos
     async function cargarM3U(url) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
@@ -88,24 +87,24 @@
       return canales;
     }
 
-    // Cargar y preparar listas
     async function inicializar() {
       try {
         canalesPais = await cargarM3U(urlPais);
         canalesCategoria = await cargarM3U(urlCategoria);
 
-        // Extraer países únicos de canalesPais
-        const paises = [...new Set(canalesPais.map(c => c.pais).filter(p => p))].sort();
+        console.log('Canales país cargados:', canalesPais.length);
+        console.log('Canales categoría cargados:', canalesCategoria.length);
 
-        // Extraer categorías únicas de canalesCategoria
+        const paises = [...new Set(canalesPais.map(c => c.pais).filter(p => p))].sort();
         const categorias = [...new Set(canalesCategoria.map(c => c.categoria).filter(c => c))].sort();
 
-        // Llenar select países
+        console.log('Países:', paises);
+        console.log('Categorías:', categorias);
+
         document.getElementById('pais').innerHTML =
           '<option value="Todos">-- Todos --</option>' +
           paises.map(p => `<option value="${p}">${p}</option>`).join('');
 
-        // Llenar select categorías
         document.getElementById('categoria').innerHTML =
           '<option value="Todos">-- Todos --</option>' +
           categorias.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -113,34 +112,34 @@
         document.getElementById('pais').addEventListener('change', mostrarCanales);
         document.getElementById('categoria').addEventListener('change', mostrarCanales);
 
-        mostrarCanales();
+        // Mostrar todos los canales inicialmente para ver si se cargan
+        mostrarCanales(true);
       } catch (error) {
         document.getElementById('resultado').innerHTML = `<p style="color:red;">Error cargando listas: ${error.message}</p>`;
       }
     }
 
-    // Mostrar canales filtrados por país y categoría
-    function mostrarCanales() {
+    // Mostrar canales, si showAll es true ignora filtros para debug
+    function mostrarCanales(showAll = false) {
       const paisSel = document.getElementById('pais').value;
       const catSel = document.getElementById('categoria').value;
       const resultado = document.getElementById('resultado');
 
-      // Filtrar canales por país y categoría
-      // Para categoría, buscamos en canalesCategoria para obtener ids de canales que coincidan
       let canalesFiltrados = canalesPais;
 
-      if (paisSel !== 'Todos') {
-        canalesFiltrados = canalesFiltrados.filter(c => c.pais === paisSel);
-      }
+      if (!showAll) {
+        if (paisSel !== 'Todos') {
+          canalesFiltrados = canalesFiltrados.filter(c => c.pais === paisSel);
+        }
 
-      if (catSel !== 'Todos') {
-        // Obtener lista de ids de canales que están en la categoría seleccionada
-        const idsCategoria = new Set(
-          canalesCategoria
-            .filter(c => c.categoria === catSel)
-            .map(c => c.id || c.nombre)
-        );
-        canalesFiltrados = canalesFiltrados.filter(c => idsCategoria.has(c.id) || idsCategoria.has(c.nombre));
+        if (catSel !== 'Todos') {
+          const idsCategoria = new Set(
+            canalesCategoria
+              .filter(c => c.categoria === catSel)
+              .map(c => c.id || c.nombre)
+          );
+          canalesFiltrados = canalesFiltrados.filter(c => idsCategoria.has(c.id) || idsCategoria.has(c.nombre));
+        }
       }
 
       if (canalesFiltrados.length === 0) {
@@ -148,7 +147,7 @@
         return;
       }
 
-      resultado.innerHTML = canalesFiltrados.map(c =>
+      resultado.innerHTML = canalesFiltrados.slice(0, 20).map(c =>
         `<div class="canal">
           <strong>${c.titulo}</strong><br />
           País: ${c.pais}<br />
@@ -157,9 +156,12 @@
           <a href="${c.url}" target="_blank" download>⬇ Descargar</a>
         </div>`
       ).join('');
+
+      if (showAll) {
+        resultado.innerHTML = `<p>Mostrando primeros 20 canales sin filtro para debug:</p>` + resultado.innerHTML;
+      }
     }
 
-    // Reproducir canal con hls.js
     function reproducirCanal(url) {
       const video = document.getElementById('player');
       if (Hls.isSupported()) {
