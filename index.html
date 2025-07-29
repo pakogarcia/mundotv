@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>IPTV por País y Categoría</title>
+  <title>IPTV por País y Categoría (IPTV-org)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -28,7 +28,7 @@
 </head>
 <body>
 
-  <h1>Selector IPTV</h1>
+  <h1>IPTV por País y Categoría (IPTV-org)</h1>
 
   <label for="pais">Selecciona País:</label>
   <select id="pais"><option>Cargando...</option></select>
@@ -45,95 +45,103 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
   <script>
-    const urlPais = 'https://pakogarcia.github.io/mundotv/data/index.country.m3u';
-    const urlCategoria = 'https://pakogarcia.github.io/mundotv/data/index.category.m3u';
+    const urlPais = 'https://iptv-org.github.io/iptv/index.country.m3u';
+    const urlCategoria = 'https://iptv-org.github.io/iptv/index.category.m3u';
 
     let canalesPais = [];
     let canalesCategoria = [];
 
+    // Función para parsear M3U y extraer canales con atributos
     async function cargarM3U(url) {
-      try {
-        console.log(`Cargando M3U desde: ${url}`);
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
-        const texto = await response.text();
-        const lineas = texto.split('\n');
-        const canales = [];
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
+      const texto = await response.text();
+      const lineas = texto.split('\n');
+      const canales = [];
 
-        for (let i = 0; i < lineas.length; i++) {
-          const linea = lineas[i].trim();
-          if (linea.startsWith('#EXTINF')) {
-            // Extraer atributos con regex
-            const info = {};
-            const attrRegex = /(\w+?)="(.*?)"/g;
-            let match;
-            while ((match = attrRegex.exec(linea)) !== null) {
-              info[match[1]] = match[2];
-            }
-            // Extraer título después de la coma
-            const tituloMatch = linea.match(/,(.*)$/);
-            const titulo = tituloMatch ? tituloMatch[1] : '';
+      for (let i = 0; i < lineas.length; i++) {
+        const linea = lineas[i].trim();
+        if (linea.startsWith('#EXTINF')) {
+          const info = {};
+          const attrRegex = /(\w+?)="(.*?)"/g;
+          let match;
+          while ((match = attrRegex.exec(linea)) !== null) {
+            info[match[1]] = match[2];
+          }
+          const tituloMatch = linea.match(/,(.*)$/);
+          const titulo = tituloMatch ? tituloMatch[1] : '';
+          const urlStream = lineas[i + 1]?.trim();
 
-            const urlStream = lineas[i + 1]?.trim();
-
-            if (urlStream && urlStream.startsWith('http')) {
-              canales.push({
-                id: info['tvg-id'] || '',
-                nombre: info['tvg-name'] || '',
-                pais: info['group-title'] || '',
-                idioma: info['tvg-language'] || '',
-                categoria: info['group-title'] || '',
-                titulo: titulo,
-                url: urlStream
-              });
-            }
+          if (urlStream && urlStream.startsWith('http')) {
+            canales.push({
+              id: info['tvg-id'] || '',
+              nombre: info['tvg-name'] || '',
+              pais: info['group-title'] || '',
+              idioma: info['tvg-language'] || '',
+              categoria: info['group-title'] || '',
+              titulo: titulo,
+              url: urlStream
+            });
           }
         }
-        console.log(`Canales cargados desde ${url}: ${canales.length}`);
-        return canales;
-      } catch (error) {
-        console.error(`Error cargando M3U desde ${url}:`, error);
-        document.getElementById('resultado').innerHTML = `<p style="color:red;">Error cargando datos: ${error.message}</p>`;
-        return [];
       }
+      return canales;
     }
 
+    // Cargar y preparar listas
     async function inicializar() {
-      canalesPais = await cargarM3U(urlPais);
-      canalesCategoria = await cargarM3U(urlCategoria);
+      try {
+        canalesPais = await cargarM3U(urlPais);
+        canalesCategoria = await cargarM3U(urlCategoria);
 
-      if (canalesPais.length === 0 || canalesCategoria.length === 0) {
-        document.getElementById('pais').innerHTML = '<option>Error al cargar países</option>';
-        document.getElementById('categoria').innerHTML = '<option>Error al cargar categorías</option>';
-        return;
+        // Extraer países únicos de canalesPais
+        const paises = [...new Set(canalesPais.map(c => c.pais).filter(p => p))].sort();
+
+        // Extraer categorías únicas de canalesCategoria
+        const categorias = [...new Set(canalesCategoria.map(c => c.categoria).filter(c => c))].sort();
+
+        // Llenar select países
+        document.getElementById('pais').innerHTML =
+          '<option value="Todos">-- Todos --</option>' +
+          paises.map(p => `<option value="${p}">${p}</option>`).join('');
+
+        // Llenar select categorías
+        document.getElementById('categoria').innerHTML =
+          '<option value="Todos">-- Todos --</option>' +
+          categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        document.getElementById('pais').addEventListener('change', mostrarCanales);
+        document.getElementById('categoria').addEventListener('change', mostrarCanales);
+
+        mostrarCanales();
+      } catch (error) {
+        document.getElementById('resultado').innerHTML = `<p style="color:red;">Error cargando listas: ${error.message}</p>`;
       }
-
-      const paises = [...new Set(canalesPais.map(c => c.pais).filter(p => p))].sort();
-      const categorias = [...new Set(canalesCategoria.map(c => c.categoria).filter(c => c))].sort();
-
-      document.getElementById('pais').innerHTML =
-        '<option value="Todos">-- Todos --</option>' +
-        paises.map(p => `<option value="${p}">${p}</option>`).join('');
-
-      document.getElementById('categoria').innerHTML =
-        '<option value="Todos">-- Todos --</option>' +
-        categorias.map(c => `<option value="${c}">${c}</option>`).join('');
-
-      document.getElementById('pais').addEventListener('change', mostrarCanales);
-      document.getElementById('categoria').addEventListener('change', mostrarCanales);
-
-      mostrarCanales();
     }
 
+    // Mostrar canales filtrados por país y categoría
     function mostrarCanales() {
       const paisSel = document.getElementById('pais').value;
       const catSel = document.getElementById('categoria').value;
       const resultado = document.getElementById('resultado');
 
-      const canalesFiltrados = canalesPais.filter(cp =>
-        (paisSel === 'Todos' || cp.pais === paisSel) &&
-        (catSel === 'Todos' || cp.categoria === catSel)
-      );
+      // Filtrar canales por país y categoría
+      // Para categoría, buscamos en canalesCategoria para obtener ids de canales que coincidan
+      let canalesFiltrados = canalesPais;
+
+      if (paisSel !== 'Todos') {
+        canalesFiltrados = canalesFiltrados.filter(c => c.pais === paisSel);
+      }
+
+      if (catSel !== 'Todos') {
+        // Obtener lista de ids de canales que están en la categoría seleccionada
+        const idsCategoria = new Set(
+          canalesCategoria
+            .filter(c => c.categoria === catSel)
+            .map(c => c.id || c.nombre)
+        );
+        canalesFiltrados = canalesFiltrados.filter(c => idsCategoria.has(c.id) || idsCategoria.has(c.nombre));
+      }
 
       if (canalesFiltrados.length === 0) {
         resultado.innerHTML = '<p>No se encontraron canales para esta selección.</p>';
@@ -151,6 +159,7 @@
       ).join('');
     }
 
+    // Reproducir canal con hls.js
     function reproducirCanal(url) {
       const video = document.getElementById('player');
       if (Hls.isSupported()) {
