@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>IPTV Selector</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    select, button { margin: 5px 0; padding: 5px; }
+    #channels { margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
+    #channels div { cursor: pointer; padding: 5px; border-bottom: 1px solid #eee; }
+    #channels div:hover { background-color: #f0f0f0; }
+    video { margin-top: 20px; width: 100%; max-width: 640px; height: 360px; background: black; }
+  </style>
+</head>
+<body>
+
+  <h1>Selector IPTV</h1>
+
+  <label for="countrySelect">Selecciona País:</label><br />
+  <select id="countrySelect"><option>Cargando...</option></select><br />
+
+  <label for="categorySelect">Selecciona Categoría:</label><br />
+  <select id="categorySelect"><option>Cargando...</option></select><br />
+
+  <div id="channels">Selecciona país y categoría para ver canales</div>
+
+  <video id="player" controls></video>
+
+<script>
+  // URLs de listas M3U
+	const urlCountry = 'data/index.country.m3u';
+	const urlCategory = 'data/index.category.m3u';
+
+
+  let channels = []; // Array con todos los canales
+  let countries = new Set();
+  let categories = new Set();
+
+  // Función para parsear M3U y extraer canales con metadatos
+  function parseM3U(text) {
+    const lines = text.split('\n');
+    const result = [];
+    let currentInfo = null;
+
+    for (let line of lines) {
+      line = line.trim();
+      if (line.startsWith('#EXTINF:')) {
+        // Extraer info
+        const info = line.match(/#EXTINF:-?\d+ (.*),(.+)/);
+        if (info) {
+          const attrs = info[1];
+          const name = info[2];
+          // Extraer grupo (category) y país (tvg-country) si existen
+          const groupMatch = attrs.match(/group-title="([^"]+)"/i);
+          const countryMatch = attrs.match(/tvg-country="([^"]+)"/i);
+          currentInfo = {
+            name: name,
+            group: groupMatch ? groupMatch[1] : '',
+            country: countryMatch ? countryMatch[1] : '',
+          };
+        }
+      } else if (line && !line.startsWith('#')) {
+        // URL del canal
+        if (currentInfo) {
+          currentInfo.url = line;
+          result.push(currentInfo);
+          currentInfo = null;
+        }
+      }
+    }
+    return result;
+  }
+
+  // Cargar y combinar listas (por país y categoría)
+  async function loadChannels() {
+    const [countryResp, categoryResp] = await Promise.all([
+      fetch(urlCountry),
+      fetch(urlCategory)
+    ]);
+    const [countryText, categoryText] = await Promise.all([
+      countryResp.text(),
+      categoryResp.text()
+    ]);
+    const countryChannels = parseM3U(countryText);
+    const categoryChannels = parseM3U(categoryText);
+
+    // Combinar canales (puede haber duplicados, filtramos por URL)
+    const map = new Map();
+    for (const ch of countryChannels) {
+      map.set(ch.url, ch);
+      countries.add(ch.country);
+    }
+    for (const ch of categoryChannels) {
+      if (map.has(ch.url)) {
+        // Añadir categoría si no existe
+        if (!map.get(ch.url).group && ch.group) {
+          map.get(ch.url).group = ch.group;
+        }
+      } else {
+        map.set(ch.url, ch);
+      }
+      if (ch.group) categories.add(ch.group);
+    }
+    channels = Array.from(map.values());
+
+    // Llenar selects
+    fillSelect('countrySelect', Array.from(countries).sort());
+    fillSelect('categorySelect', Array.from(categories).sort());
+  }
+
+  function fillSelect(id, items) {
+    const select = document.getElementById(id);
+    select.innerHTML = '<option value="">-- Todos --</option>';
+    for (const item of items) {
+      if (item) {
+        const opt = document.createElement('option');
+        opt.value = item;
+        opt.textContent = item;
+        select.appendChild(opt);
+      }
+    }
+  }
+
+  // Filtrar canales según selección
+  function filterChannels() {
+    const country = document.getElementById('countrySelect').value;
+    const category = document.getElementById('categorySelect').value;
+    const container = document.getElementById('channels');
+    container.innerHTML = '';
+
+    const filtered = channels.filter(ch => {
+      return (country === '' || ch.country === country) &&
+             (category === '' || ch.group === category);
+    });
+
+    if (filtered.length === 0) {
+      container.textContent = 'No se encontraron canales para esta selección.';
+      return;
+    }
+
+    for (const ch of filtered) {
+      const div = document.createElement('div');
+      div.textContent = ch.name;
+      div.title = `País: ${ch.country} | Categoría: ${ch.group}`;
+      div.onclick = () => playChannel(ch.url);
+      container.appendChild(div);
+    }
+  }
+
+  // Reproducir canal
+  function playChannel(url) {
+    const player = document.getElementById('player');
+    player.src = url;
+    player.play().catch(() => {
+      alert('No se pudo reproducir este canal en este navegador.');
+    });
+  }
+
+  // Eventos
+  document.getElementById('countrySelect').addEventListener('change', filterChannels);
+  document.getElementById('categorySelect').addEventListener('change', filterChannels);
+
+  // Inicializar
+  loadChannels().then(() => {
+    document.getElementById('channels').textContent = 'Selecciona país y categoría para ver canales';
+  });
+</script>
+
+</body>
+</html>
