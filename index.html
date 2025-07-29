@@ -56,7 +56,7 @@
           currentInfo = {
             name: name,
             group: groupMatch ? groupMatch[1] : '',
-            country: countryMatch ? countryMatch[1] : '',
+            country: countryMatch ? countryMatch[1] : (groupMatch ? groupMatch[1] : ''),
           };
         }
       } else if (line && !line.startsWith('#')) {
